@@ -1,0 +1,75 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+
+# Вопросы и ответы
+questions = [
+    {
+        "question": "Какой язык программирования мы используем?",
+        "options": ["Python", "JavaScript", "C++", "Ruby"],
+        "correct_option": 0
+    },
+    {
+        "question": "Какой из этих языков используется для веб-разработки?",
+        "options": ["Python", "C#", "JavaScript", "R"],
+        "correct_option": 2
+    }
+]
+
+# Переменные для отслеживания состояния пользователя
+user_data = {}
+
+def start(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    user_data[user_id] = {"score": 0, "question_index": 0}
+    ask_question(update, context)
+
+def ask_question(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    question_index = user_data[user_id]["question_index"]
+    question_data = questions[question_index]
+
+    keyboard = [
+        [InlineKeyboardButton(option, callback_data=str(i)) for i, option in enumerate(question_data["options"])]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    update.message.reply_text(question_data["question"], reply_markup=reply_markup)
+
+def handle_answer(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    user_id = query.from_user.id
+    question_index = user_data[user_id]["question_index"]
+    question_data = questions[question_index]
+    user_choice = int(query.data)
+
+    if user_choice == question_data["correct_option"]:
+        query.edit_message_text("Ваш ответ верный!")
+        user_data[user_id]["score"] += 1
+    else:
+        correct_option = question_data["options"][question_data["correct_option"]]
+        query.edit_message_text(f"Ваш ответ неверен. Правильный ответ: {correct_option}")
+
+    # Переход к следующему вопросу или окончание опроса
+    if question_index + 1 < len(questions):
+        user_data[user_id]["question_index"] += 1
+        ask_question(update, context)
+    else:
+        score = user_data[user_id]["score"]
+        query.message.reply_text(f"Опрос завершен. Количество правильных ответов: {score}/{len(questions)}.")
+        query.message.reply_text("Хотите пройти опрос снова? Введите /start.")
+        user_data[user_id] = {"score": 0, "question_index": 0}
+
+def main():
+    updater = Updater("YOUR_TOKEN")
+    dispatcher = updater.dispatcher
+
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CallbackQueryHandler(handle_answer))
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
